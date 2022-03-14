@@ -1,10 +1,13 @@
 /* eslint-disable no-new */
+import 'dotenv/config'
 import { Construct } from 'constructs'
 import { App, TerraformStack, TerraformOutput } from 'cdktf'
 import * as AZ from '@cdktf/provider-azurerm'
+import * as EX from '@cdktf/provider-external'
 import { readFileSync } from 'fs'
 import path = require('path')
-import { spawnSync } from 'child_process'
+
+const { TELEGRAM_BOT_TOKEN } = process.env
 
 class MyStack extends TerraformStack {
   constructor (scope: Construct, name: string) {
@@ -15,38 +18,71 @@ class MyStack extends TerraformStack {
       features: {}
     })
 
-    const region = 'eastus'
+    new EX.ExternalProvider(this, 'externals', { })
+
+    // ********** RESOURCE GROUP **********
     const rg = new AZ.ResourceGroup(this, 'cdktf-rg', {
       name: 'cdktf-demo-rg',
-      location: region
+      location: 'eastus'
     })
-
-    const saccount = new AZ.StorageAccount(this, 'cdktf-account', {
-      name: 'cdkstorageaccount',
+    // ********** STORAGE  **********
+    const storage = new AZ.StorageAccount(this, 'cdktf-account', {
+      name: 'cdkstorageaccountv2',
       location: rg.location,
       resourceGroupName: rg.name,
       accountTier: 'Standard',
       accountReplicationType: 'LRS'
     })
+    // this.createVM(rg, storage)
+    this.createFunction(rg, storage)
+  }
 
-    const scontainer = new AZ.StorageContainer(this, 'cdktf-container', {
-      storageAccountName: saccount.name,
-      name: 'c-container'
+  createFunction (rg: AZ.ResourceGroup, storage: AZ.StorageAccount) {
+    const appPlan = new AZ.AppServicePlan(this, 'cdktf-app-plan', {
+      name: 'consumption-plan',
+      location: rg.location,
+      resourceGroupName: rg.name,
+      sku: { tier: 'Dynamic', size: 'Y1' }, // consumption plan
+      kind: 'Linux',
+      reserved: true,
+      lifecycle: {
+        ignoreChanges: [
+          'kind'
+        ]
+      }
     })
 
-    spawnSync('zip',
-      ['-r', 'myapp.zip', 'myapp'],
-      { cwd: __dirname }
-    )
-
-    const file = new AZ.StorageBlob(this, 'blob-file', {
-      name: 'myapp.zip',
-      type: 'Block',
-      storageAccountName: saccount.name,
-      storageContainerName: scontainer.name,
-      source: path.join(__dirname, 'myapp.zip')
+    const app = new AZ.FunctionApp(this, 'cdktf-function-app', {
+      name: 'jhtelebotv2',
+      location: rg.location,
+      resourceGroupName: rg.name,
+      appServicePlanId: appPlan.id,
+      storageAccountName: storage.name,
+      storageAccountAccessKey: storage.primaryAccessKey,
+      appSettings: {
+        WEBSITE_NODE_DEFAULT_VERSION: '~14',
+        TELEGRAM_BOT_TOKEN: TELEGRAM_BOT_TOKEN as string
+      },
+      osType: 'linux',
+      siteConfig: {
+        linuxFxVersion: 'node|14',
+        use32BitWorkerProcess: false
+      },
+      version: '~4'
     })
 
+    const publish = new EX.DataExternal(this, 'publish-func', {
+      dependsOn: [{ fqn: app.fqn }],
+      program: ['bash', '-c', `func azure functionapp publish ${app.name} >> function.log && echo '{"ok": "true"}'`],
+      workingDir: path.join(__dirname, 'CdkTfFunctions')
+    })
+
+    new TerraformOutput(this, 'Publish', { value: publish.result('ok') })
+    new TerraformOutput(this, 'Function App', { value: app.defaultHostname })
+  }
+
+  createVM (rg: AZ.ResourceGroup, storage: AZ.StorageAccount) {
+    // ********** NETWORK **********
     const vnet = new AZ.VirtualNetwork(this, 'cdktf-vnet', {
       name: 'd-vnet',
       resourceGroupName: rg.name,
@@ -117,8 +153,28 @@ class MyStack extends TerraformStack {
       networkSecurityGroupId: nsc.id
     })
 
+    // ********** BLOB STORAGE **********
+    const scontainer = new AZ.StorageContainer(this, 'cdktf-container', {
+      storageAccountName: storage.name,
+      name: 'c-container-v2'
+    })
+
+    const build = new EX.DataExternal(this, 'zip-vm', {
+      program: ['bash', '-c', 'zip -r myapp.zip myapp/ >> build.log && echo \'{"dest": "myapp.zip"}\''],
+      workingDir: __dirname
+    })
+
+    const file = new AZ.StorageBlob(this, 'blob-file', {
+      name: 'myapp.zip',
+      type: 'Block',
+      storageAccountName: storage.name,
+      storageContainerName: scontainer.name,
+      source: path.join(__dirname, build.result('dest').toString())
+    })
+
+    // ********** VM **********
     const vm = new AZ.VirtualMachine(this, 'cdktf-vm', {
-      name: 'cdktf-demo-vm-v6',
+      name: 'cdktf-demo-vm-v7',
       resourceGroupName: rg.name,
       location: rg.location,
       vmSize: 'Standard_DS1_v2',
@@ -135,8 +191,8 @@ class MyStack extends TerraformStack {
         customData: readFileSync('./cloud-init/customData.yml', 'utf8')
           .replace('{CONTAINER}', scontainer.name)
           .replace('{BLOBNAME}', file.name)
-          .replace('{ACCOUNT}', saccount.name)
-          .replace('{S_KEY}', saccount.primaryAccessKey)
+          .replace('{ACCOUNT}', storage.name)
+          .replace('{S_KEY}', storage.primaryAccessKey)
       },
       osProfileLinuxConfig: {
         disablePasswordAuthentication: false
@@ -149,8 +205,9 @@ class MyStack extends TerraformStack {
       }
     })
 
+    // ********** OUTPUTS **********
     new TerraformOutput(this, 'VM', { value: vm.name })
-    new TerraformOutput(this, 'url', { value: `${ip.domainNameLabel}.${region}.cloudapp.azure.com` })
+    new TerraformOutput(this, 'url', { value: `http://${ip.domainNameLabel}.${rg.location}.cloudapp.azure.com` })
     new TerraformOutput(this, 'ip', { value: ip.ipAddress })
   }
 }

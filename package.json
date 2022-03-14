@@ -21,8 +21,10 @@
   },
   "dependencies": {
     "@cdktf/provider-azurerm": "^0.5.52",
+    "@cdktf/provider-external": "^0.4.49",
     "cdktf": "^0.9.4",
-    "constructs": "^10.0.85"
+    "constructs": "^10.0.85",
+    "dotenv": "^16.0.0"
   },
   "devDependencies": {
     "@types/jest": "^27.4.1",
