@@ -1,0 +1,31 @@
+#cloud-config
+package_upgrade: true
+packages:
+  - nginx
+  - nodejs
+  - npm
+  - unzip
+write_files:
+  - owner: www-data:www-data
+    path: /etc/nginx/sites-available/default
+    content: |
+      server {
+        listen 80;
+        location / {
+          proxy_pass http://localhost:3000;
+          proxy_http_version 1.1;
+          proxy_set_header Upgrade $http_upgrade;
+          proxy_set_header Connection keep-alive;
+          proxy_set_header Host $host;
+          proxy_cache_bypass $http_upgrade;
+        }
+      }
+runcmd:
+  - curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash -s -- -y
+  - service nginx restart
+  - az storage blob download --container-name {CONTAINER} --file /home/azureuser/myapp.zip --name {BLOBNAME} --account-name {ACCOUNT} --account-key {S_KEY}
+  - unzip /home/azureuser/myapp.zip -d /home/azureuser/
+  - cd "/home/azureuser/myapp"
+  - npm init -y
+  - npm install express -y
+  - nodejs index.js &
