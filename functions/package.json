@@ -7,6 +7,8 @@
   },
   "author": "",
   "dependencies": {
-    "telegraf": "^4.7.0"
+    "i": "^0.3.7",
+    "node-telegram-bot-api": "^0.56.0",
+    "npm": "^8.5.4"
   }
 }

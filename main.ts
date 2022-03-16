@@ -1,13 +1,13 @@
 /* eslint-disable no-new */
 import 'dotenv/config'
 import { Construct } from 'constructs'
-import { App, TerraformStack, TerraformOutput } from 'cdktf'
+import { App, TerraformStack, TerraformOutput, AzurermBackend } from 'cdktf'
 import * as AZ from '@cdktf/provider-azurerm'
 import * as EX from '@cdktf/provider-external'
 import { readFileSync } from 'fs'
 import path = require('path')
 
-const { TELEGRAM_BOT_TOKEN } = process.env
+const { TELEGRAM_BOT_TOKEN, CHAT_ID } = process.env
 
 class MyStack extends TerraformStack {
   constructor (scope: Construct, name: string) {
@@ -18,11 +18,17 @@ class MyStack extends TerraformStack {
       features: {}
     })
 
+    new AzurermBackend(this, {
+      key: 'azure-explorations-v2.tfstate',
+      containerName: 'bootstrap',
+      storageAccountName: 'jhtfbootstrap'
+    })
+
     new EX.ExternalProvider(this, 'externals', { })
 
     // ********** RESOURCE GROUP **********
-    const rg = new AZ.ResourceGroup(this, 'cdktf-rg', {
-      name: 'cdktf-demo-rg',
+    const rg = new AZ.ResourceGroup(this, 'cdktf-rg-v2', {
+      name: 'cdktf-rg-v2',
       location: 'eastus'
     })
     // ********** STORAGE  **********
@@ -60,7 +66,9 @@ class MyStack extends TerraformStack {
       storageAccountName: storage.name,
       storageAccountAccessKey: storage.primaryAccessKey,
       appSettings: {
+        FUNCTIONS_WORKER_RUNTIME: 'node',
         WEBSITE_NODE_DEFAULT_VERSION: '~14',
+        CHAT_ID: CHAT_ID as string,
         TELEGRAM_BOT_TOKEN: TELEGRAM_BOT_TOKEN as string
       },
       osType: 'linux',
@@ -71,14 +79,13 @@ class MyStack extends TerraformStack {
       version: '~4'
     })
 
-    const publish = new EX.DataExternal(this, 'publish-func', {
-      dependsOn: [{ fqn: app.fqn }],
-      program: ['bash', '-c', `func azure functionapp publish ${app.name} >> function.log && echo '{"ok": "true"}'`],
-      workingDir: path.join(__dirname, 'CdkTfFunctions')
+    new TerraformOutput(this, 'Function Setup:', {
+      value: `func azure functionapp fetch-app-settings ${app.name}`
     })
-
-    new TerraformOutput(this, 'Publish', { value: publish.result('ok') })
-    new TerraformOutput(this, 'Function App', { value: app.defaultHostname })
+    new TerraformOutput(this, 'Function Publish:', {
+      value: `func azure functionapp publish ${app.name}`
+    })
+    new TerraformOutput(this, 'Function Url:', { value: app.defaultHostname })
   }
 
   createVM (rg: AZ.ResourceGroup, storage: AZ.StorageAccount) {
@@ -160,12 +167,12 @@ class MyStack extends TerraformStack {
     })
 
     const build = new EX.DataExternal(this, 'zip-vm', {
-      program: ['bash', '-c', 'zip -r myapp.zip myapp/ >> build.log && echo \'{"dest": "myapp.zip"}\''],
+      program: ['bash', '-c', 'zip -r vm.zip vm/ >> build.log && echo \'{"dest": "vm.zip"}\''],
       workingDir: __dirname
     })
 
     const file = new AZ.StorageBlob(this, 'blob-file', {
-      name: 'myapp.zip',
+      name: 'vm.zip',
       type: 'Block',
       storageAccountName: storage.name,
       storageContainerName: scontainer.name,
