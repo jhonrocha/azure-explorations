@@ -1,11 +1,14 @@
 require('dotenv').config()
 const TelegramBot = require('node-telegram-bot-api')
+const { getSephora, getEpoca } = require('../services/perfumes/index.js')
 
 const { TELEGRAM_BOT_TOKEN, CHAT_ID } = process.env
 const bot = new TelegramBot(TELEGRAM_BOT_TOKEN, { polling: true })
 
 bot.onText(/Perfumes/, (msg) => {
-  bot.sendMessage(msg.chat.id, 'Lista de perfumes')
+  const epoca = getEpoca()
+  const sephora = getSephora()
+  bot.sendMessage(msg.chat.id, `Lista de perfumes:\n${sephora}`)
 })
 
 bot.onText(/oi/i, (msg) => {

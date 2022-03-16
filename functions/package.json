@@ -3,12 +3,14 @@
   "version": "",
   "description": "",
   "scripts": {
-    "test": "echo \"No tests yet...\""
+    "test": "tap"
   },
   "author": "",
+  "devDependencies": {
+    "tap": "^16.0.0"
+  },
   "dependencies": {
-    "i": "^0.3.7",
-    "node-telegram-bot-api": "^0.56.0",
-    "npm": "^8.5.4"
+    "axios": "^0.26.1",
+    "node-telegram-bot-api": "^0.56.0"
   }
 }

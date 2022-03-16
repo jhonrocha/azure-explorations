@@ -19,6 +19,7 @@ class MyStack extends TerraformStack {
     })
 
     new AzurermBackend(this, {
+      resourceGroupName: 'TerraformBootstrap',
       key: 'azure-explorations-v2.tfstate',
       containerName: 'bootstrap',
       storageAccountName: 'jhtfbootstrap'
@@ -79,13 +80,13 @@ class MyStack extends TerraformStack {
       version: '~4'
     })
 
-    new TerraformOutput(this, 'Function Setup:', {
+    new TerraformOutput(this, 'Function_Setup:', {
       value: `func azure functionapp fetch-app-settings ${app.name}`
     })
-    new TerraformOutput(this, 'Function Publish:', {
+    new TerraformOutput(this, 'Function_Publish:', {
       value: `func azure functionapp publish ${app.name}`
     })
-    new TerraformOutput(this, 'Function Url:', { value: app.defaultHostname })
+    new TerraformOutput(this, 'Function_Url:', { value: app.defaultHostname })
   }
 
   createVM (rg: AZ.ResourceGroup, storage: AZ.StorageAccount) {

@@ -16,3 +16,7 @@ bot.onText(/oi/i, (msg) => {
     }
   })
 })
+
+bot.on('message', (ctx) => {
+  console.log('CHAT_ID', ctx.chat.id)
+})

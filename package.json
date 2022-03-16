@@ -24,7 +24,8 @@
     "@cdktf/provider-external": "^0.4.49",
     "cdktf": "^0.9.4",
     "constructs": "^10.0.85",
-    "dotenv": "^16.0.0"
+    "dotenv": "^16.0.0",
+    "npm": "^8.5.4"
   },
   "devDependencies": {
     "@types/jest": "^27.4.1",
