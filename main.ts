@@ -1,13 +1,10 @@
 /* eslint-disable no-new */
-import 'dotenv/config'
 import { Construct } from 'constructs'
 import { App, TerraformStack, TerraformOutput, AzurermBackend } from 'cdktf'
 import * as AZ from '@cdktf/provider-azurerm'
 import * as EX from '@cdktf/provider-external'
 import { readFileSync } from 'fs'
 import path = require('path')
-
-const { TELEGRAM_BOT_TOKEN, CHAT_ID } = process.env
 
 class MyStack extends TerraformStack {
   constructor (scope: Construct, name: string) {
@@ -17,6 +14,8 @@ class MyStack extends TerraformStack {
     new AZ.AzurermProvider(this, 'azureFeature', {
       features: {}
     })
+
+    const config = new AZ.DataAzurermClientConfig(this, 'cdktf-application')
 
     new AzurermBackend(this, {
       resourceGroupName: 'TerraformBootstrap',
@@ -40,11 +39,48 @@ class MyStack extends TerraformStack {
       accountTier: 'Standard',
       accountReplicationType: 'LRS'
     })
+
+    // ********** KEY VAULT  **********
+    const vault = new AZ.KeyVault(this, 'cdktf-key-vault', {
+      name: 'jh-demo-vault',
+      resourceGroupName: rg.name,
+      location: rg.location,
+      skuName: 'standard',
+      tenantId: config.tenantId
+    })
+
+    new AZ.KeyVaultAccessPolicyA(this, 'cdktf-vault-azure', {
+      keyVaultId: vault.id,
+      tenantId: config.tenantId,
+      objectId: config.objectId,
+      certificatePermissions: [
+        'Backup', 'Create', 'Delete', 'DeleteIssuers',
+        'Get', 'GetIssuers', 'Import', 'List', 'ListIssuers',
+        'ManageContacts', 'ManageIssuers', 'Purge',
+        'Recover', 'Restore', 'SetIssuers', 'Update'
+      ],
+      keyPermissions: [
+        'Backup', 'Create', 'Decrypt', 'Delete', 'Encrypt',
+        'Get', 'Import', 'List', 'Purge', 'Recover', 'Restore',
+        'Sign', 'UnwrapKey', 'Update', 'Verify', 'WrapKey'
+      ],
+      secretPermissions: [
+        'Backup', 'Delete', 'Get', 'List',
+        'Purge', 'Recover', 'Restore', 'Set'
+      ],
+      storagePermissions: [
+        'Backup', 'Delete', 'DeleteSAS', 'Get',
+        'GetSAS', 'List', 'ListSAS', 'Purge', 'Recover',
+        'RegenerateKey', 'Restore', 'Set', 'SetSAS', 'Update'
+      ]
+    })
+
+    // ********** CODE  **********
     // this.createVM(rg, storage)
-    this.createFunction(rg, storage)
+    this.createFunction(rg, storage, vault)
   }
 
-  createFunction (rg: AZ.ResourceGroup, storage: AZ.StorageAccount) {
+  createFunction (rg: AZ.ResourceGroup, storage: AZ.StorageAccount, vault: AZ.KeyVault) {
     const appPlan = new AZ.AppServicePlan(this, 'cdktf-app-plan', {
       name: 'consumption-plan',
       location: rg.location,
@@ -66,11 +102,12 @@ class MyStack extends TerraformStack {
       appServicePlanId: appPlan.id,
       storageAccountName: storage.name,
       storageAccountAccessKey: storage.primaryAccessKey,
+      identity: { type: 'SystemAssigned' },
       appSettings: {
         FUNCTIONS_WORKER_RUNTIME: 'node',
         WEBSITE_NODE_DEFAULT_VERSION: '~14',
-        CHAT_ID: CHAT_ID as string,
-        TELEGRAM_BOT_TOKEN: TELEGRAM_BOT_TOKEN as string
+        CHAT_ID: `@Microsoft.KeyVault(VaultName=${vault.name};SecretName=chatId)`,
+        TELEGRAM_BOT_TOKEN: `@Microsoft.KeyVault(VaultName=${vault.name};SecretName=telegramBotToken)`
       },
       osType: 'linux',
       siteConfig: {
@@ -79,6 +116,21 @@ class MyStack extends TerraformStack {
       },
       version: '~4'
     })
+
+    // // ********** ACCESS POLICIES **********
+    // BIG ISSUE WITH TERRAFORM: https://github.com/hashicorp/terraform-provider-azurerm/issues/13320
+    new AZ.KeyVaultAccessPolicyA(this, 'cdktf-vault-app', {
+      keyVaultId: vault.id,
+      tenantId: vault.tenantId,
+      objectId: app.identity.principalId,
+      keyPermissions: ['Get'],
+      secretPermissions: ['Get'],
+      storagePermissions: ['Get']
+    })
+    // policy.addOverride('object_id', `${app.fqn}.identity.0.principal_id`)
+    // policy.addOverride('object_id', `\${${app.fqn}.identity.0..principal_id}`)
+    // policy.addOverride('object_id', `\${k${app.fqn}.identity[0].principal_id}`)
+    // policy.addOverride('object_id', '${azurerm_function_app.cdktf-function-app.identity.0.principal_id}')
 
     new TerraformOutput(this, 'Function_Setup:', {
       value: `func azure functionapp fetch-app-settings ${app.name}`

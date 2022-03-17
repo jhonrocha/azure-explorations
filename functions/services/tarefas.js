@@ -1,6 +1,6 @@
 const t = {
-  dManha: 'Manhã com Dunkinha',
-  dNoite: 'Noite com Dunkinha',
+  dManha: 'Manhã do Dunkinha',
+  dNoite: 'Noite do Dunkinha',
   cLouca: 'Lavar louças',
   cVarre: 'Varrer o chão',
   rLavar: 'Lavar roupas',
