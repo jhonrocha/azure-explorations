@@ -1,20 +1,17 @@
-require('dotenv').config()
 const TelegramBot = require('node-telegram-bot-api')
-const { getSephora, getEpoca } = require('../services/perfumes/index.js')
 
 const { TELEGRAM_BOT_TOKEN, CHAT_ID } = process.env
 const bot = new TelegramBot(TELEGRAM_BOT_TOKEN, { polling: true })
 
-bot.onText(/Perfumes/, (msg) => {
-  const epoca = getEpoca()
-  const sephora = getSephora()
-  bot.sendMessage(msg.chat.id, `Lista de perfumes:\n${sephora}`)
+bot.onText(/perfumes/i, (msg) => {
+  console.log(CHAT_ID)
+  bot.sendMessage(msg.chat.id, 'Lista de perfumes:')
 })
 
 bot.onText(/oi/i, (msg) => {
   bot.sendMessage(msg.chat.id, 'Posso ajudar?', {
     reply_markup: {
-      keyboard: [['Perfumes']]
+      keyboard: [['perfumes']]
     }
   })
 })
@@ -23,7 +20,7 @@ bot.onText(/oi/i, (msg) => {
 module.exports = async function (context, req) {
   if (req.query.setup) {
     try {
-      await bot.setWebhook(req.originalUrl.split('?')[0])
+      await bot.setWebHook(req.originalUrl.split('?')[0].replace('http:', 'https:'))
       context.res = {
         status: 200,
         body: { ok: true },
@@ -34,11 +31,10 @@ module.exports = async function (context, req) {
       context.res = { status: 500, body: err }
     }
   } else {
-    await bot.sendMessage(CHAT_ID, 'Hello Everyone!')
     bot.processUpdate(req.body)
     context.res = {
       status: 200,
-      body: { ok: true },
+      body: { health: true },
       headers: { 'Content-Type': 'application/json' }
     }
   }
