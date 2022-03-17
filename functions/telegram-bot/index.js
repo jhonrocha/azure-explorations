@@ -1,10 +1,9 @@
 const TelegramBot = require('node-telegram-bot-api')
-
-const { TELEGRAM_BOT_TOKEN, CHAT_ID } = process.env
+const { TELEGRAM_BOT_TOKEN } = process.env
 const bot = new TelegramBot(TELEGRAM_BOT_TOKEN, { polling: true })
 
 bot.onText(/perfumes/i, (msg) => {
-  console.log(CHAT_ID)
+  console.log(process.env.CHAT_ID)
   bot.sendMessage(msg.chat.id, 'Lista de perfumes:')
 })
 
