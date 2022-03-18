@@ -77,10 +77,13 @@ class MyStack extends TerraformStack {
 
     // ********** CODE  **********
     // this.createVM(rg, storage)
-    this.createFunction(rg, storage, vault)
+    this.functionApps(rg, storage, vault)
   }
 
-  createFunction (rg: AZ.ResourceGroup, storage: AZ.StorageAccount, vault: AZ.KeyVault) {
+  functionApps (rg: AZ.ResourceGroup, storage: AZ.StorageAccount, vault: AZ.KeyVault) {
+    // func init
+    // func new
+    // func azure functionapp fetch-app-settings ${app.name}`
     const appPlan = new AZ.AppServicePlan(this, 'cdktf-app-plan', {
       name: 'consumption-plan',
       location: rg.location,
@@ -95,8 +98,14 @@ class MyStack extends TerraformStack {
       }
     })
 
-    const app = new AZ.FunctionApp(this, 'cdktf-function-app', {
-      name: 'jhtelebotv2',
+    // Functions
+    this.functionAppNode(rg, storage, vault, appPlan)
+    this.functionAppRust(rg, storage, vault, appPlan)
+  }
+
+  functionAppNode (rg: AZ.ResourceGroup, storage: AZ.StorageAccount, vault: AZ.KeyVault, appPlan: AZ.AppServicePlan) {
+    const app = new AZ.FunctionApp(this, 'cdktf-node', {
+      name: 'jhtelebotv3',
       location: rg.location,
       resourceGroupName: rg.name,
       appServicePlanId: appPlan.id,
@@ -127,18 +136,34 @@ class MyStack extends TerraformStack {
       secretPermissions: ['Get'],
       storagePermissions: ['Get']
     })
-    // policy.addOverride('object_id', `${app.fqn}.identity.0.principal_id`)
-    // policy.addOverride('object_id', `\${${app.fqn}.identity.0..principal_id}`)
-    // policy.addOverride('object_id', `\${k${app.fqn}.identity[0].principal_id}`)
-    // policy.addOverride('object_id', '${azurerm_function_app.cdktf-function-app.identity.0.principal_id}')
-
-    new TerraformOutput(this, 'Function_Setup:', {
-      value: `func azure functionapp fetch-app-settings ${app.name}`
-    })
-    new TerraformOutput(this, 'Function_Publish:', {
+    new TerraformOutput(this, 'NodePublish', {
       value: `func azure functionapp publish ${app.name}`
     })
-    new TerraformOutput(this, 'Function_Url:', { value: app.defaultHostname })
+    new TerraformOutput(this, 'NodeUrl', { value: app.defaultHostname })
+  }
+
+  functionAppRust (rg: AZ.ResourceGroup, storage: AZ.StorageAccount, _vault: AZ.KeyVault, appPlan: AZ.AppServicePlan) {
+    // func init
+    // func new
+    const app = new AZ.FunctionApp(this, 'cdktf-rust', {
+      name: 'jhfapprust',
+      location: rg.location,
+      resourceGroupName: rg.name,
+      appServicePlanId: appPlan.id,
+      storageAccountName: storage.name,
+      storageAccountAccessKey: storage.primaryAccessKey,
+      identity: { type: 'SystemAssigned' },
+      appSettings: {
+        FUNCTIONS_WORKER_RUNTIME: 'custom'
+      },
+      osType: 'linux',
+      version: '~4'
+    })
+
+    new TerraformOutput(this, 'RustPublish', {
+      value: `func azure functionapp publish ${app.name}`
+    })
+    new TerraformOutput(this, 'RustUrl', { value: app.defaultHostname })
   }
 
   createVM (rg: AZ.ResourceGroup, storage: AZ.StorageAccount) {
